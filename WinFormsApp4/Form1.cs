@@ -17,7 +17,6 @@ namespace WinFormsApp4
         private List<PictureBox> traps = new List<PictureBox>();
         private int playerSpeed = 10;
         private int maxTraps = 10;
-        private int enemyMax = 5;
         private bool gameRunning = false;
         private int score = 0;
         private Label scoreLabel;
@@ -25,14 +24,12 @@ namespace WinFormsApp4
         private int spawnInterval = 15000; 
         private int spawnIncreaseAmount = 1;
         private int maxEnemiesOnScreen = 10;
-
+        private int totalEnemiesKilled = 0;
         public Form1()
         {
             InitializeComponent();
-            this.DoubleBuffered = true;
             InitializePlayer();
             SetPanelBackground(gameRunning);
-            gameRunning = true;
             button1.TabStop = false;
             panel1.TabStop = true;
             panel1.Focus();
@@ -154,14 +151,15 @@ namespace WinFormsApp4
 
         private void InitializeEnemies()
         {
-            for (int i = 0; i < enemyMax; i++)
+            for (int i = 0; i < 3; i++)
             {
                 CreateInitialEnemy();
             }
         }
-
         private void CreateInitialEnemy()
         {
+
+            const int minDistance = 150;
             PictureBox enemy = new PictureBox();
             enemy.Size = new Size(40, 40);
             enemy.Image = Properties.Resources.fff8c3f0b700ad6e6d649afd858b5c45;
@@ -169,9 +167,23 @@ namespace WinFormsApp4
             enemy.SizeMode = PictureBoxSizeMode.StretchImage;
             int x = random.Next(0, panel1.Width - enemy.Width);
             int y = random.Next(0, panel1.Height - enemy.Height);
+            if (Distance(new Point(x, y), player.Location) < minDistance)
+            {
+                if (x < player.Location.X)
+                    x = Math.Max(0, x - minDistance);
+                else
+                    x = Math.Min(panel1.Width - enemy.Width, x + minDistance);
+
+                if (y < player.Location.Y)
+                    y = Math.Max(0, y - minDistance);
+                else
+                    y = Math.Min(panel1.Height - enemy.Height, y + minDistance);
+            }
+
             enemy.Location = new Point(x, y);
             panel1.Controls.Add(enemy);
             enemies.Add(enemy);
+
             int dx = 0, dy = 0;
             while (dx == 0)
                 dx = random.Next(-enemySpeed, enemySpeed + 1);
@@ -245,20 +257,35 @@ namespace WinFormsApp4
             player.Left = Math.Max(0, Math.Min(player.Left, panel1.Width - player.Width));
             player.Top = Math.Max(0, Math.Min(player.Top, panel1.Height - player.Height));
         }
-
+        private double Distance(Point p1, Point p2)
+        {
+            int dx = p1.X - p2.X;
+            int dy = p1.Y - p2.Y;
+            return Math.Sqrt(dx * dx + dy * dy);
+        }
         private void PlaceTrap()
         {
             if (traps.Count == maxTraps)
             {
-                MessageBox.Show("У вас закончились ловушки!");
                 return;
             }
+
+            const int minDistanceBetweenTraps = 60;
+            Point trapLocation = player.Location;
+
             foreach (var existingTrap in traps)
             {
-                if (existingTrap.Bounds.IntersectsWith(player.Bounds))
+                if (existingTrap.Bounds.IntersectsWith(new Rectangle(trapLocation, new Size(50, 50))))
                 {
-                    MessageBox.Show("Здесь уже есть ловушка!");
-                    return;
+                    return; 
+                }
+            }
+
+            foreach (var existingTrap in traps)
+            {
+                if(Distance(existingTrap.Location, trapLocation) < minDistanceBetweenTraps)
+                {
+                    return; 
                 }
             }
             PictureBox trap = new PictureBox();
@@ -272,7 +299,6 @@ namespace WinFormsApp4
             traps.Add(trap);
             UpdateTrapsLabel();
         }
-
         private void CheckCollisions()
         {
             for (int i = enemies.Count - 1; i >= 0; i--)
@@ -288,12 +314,19 @@ namespace WinFormsApp4
                         enemyDirections.RemoveAt(i);
                         panel1.Controls.Remove(trap);
                         traps.RemoveAt(j);
+                        totalEnemiesKilled++;
                         score++;
                         UpdateScoreLabel();
+                        if (totalEnemiesKilled >= 3)
+                        {
+                            GameOver();
+                            return;
+                        }
                         break;
                     }
                 }
             }
+
             foreach (var enemy in enemies)
             {
                 if (player.Bounds.IntersectsWith(enemy.Bounds))
@@ -303,6 +336,7 @@ namespace WinFormsApp4
                 }
             }
         }
+        
 
         private void StartGame()
         {
@@ -321,10 +355,11 @@ namespace WinFormsApp4
             gameRunning = false;
             timerMove.Stop();
             timerEnemySpawn.Stop();
-            if (score == enemyMax)
+            if (totalEnemiesKilled >= 3)
             {
-                MessageBox.Show($"Игра окончена! Вы победили всех врагов! Счет: {score}");
+                MessageBox.Show($"Вы победили! Вы уничтожили всех врагов! Счет: {score}");
             }
+
             else
             {
                 MessageBox.Show($"Игра окончена! Счет: {score}");
@@ -358,6 +393,7 @@ namespace WinFormsApp4
             enemySpeed = 3;
             spawnInterval = 10000;
             score = 0;
+            totalEnemiesKilled = 0;
             button1.Visible = true;
             player.Location = new Point(panel1.Width / 2, panel1.Height / 2);
             SetPanelBackground(gameRunning);
